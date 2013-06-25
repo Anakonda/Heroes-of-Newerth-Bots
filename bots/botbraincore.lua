@@ -508,6 +508,10 @@ function core.GetKillKeys(unitTarget)
 end
 
 function core.ProcessKillChat(unitTarget, sTargetPlayerName)
+	if core.tableContains(core.EnemyHeroes, unitTarget) == 0 then
+		return
+	end
+
 	local nCurrentTime = HoN.GetGameTime()
 	if nCurrentTime < core.nNextChatEventTime then
 		return
