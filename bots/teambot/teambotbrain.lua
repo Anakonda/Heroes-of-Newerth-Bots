@@ -717,7 +717,11 @@ end
 
 
 function object:GetThreat(unitHero)
-	return self.tStoredThreats[unitHero:GetUniqueID()] or 0
+	threat = self.tStoredThreats[unitHero:GetUniqueID()]
+	if not threat then
+		threat = object.CalculateThreat(unitHero)
+	end
+	return threat
 end
 
 function object:GetTotalThreat(tUnits)
@@ -731,7 +735,12 @@ function object:GetTotalThreat(tUnits)
 end
 
 function object:GetDefense(unitHero)
-	return self.tStoredDefenses[unitHero:GetUniqueID()] or 0
+	defense = self.tStoredDefenses[unitHero:GetUniqueID()]
+	if not defense then
+		defense = object.CalculateDefense(unitHero)
+	end
+
+	return defense
 end
 
 function object:GetTotalDefense(tUnits)
