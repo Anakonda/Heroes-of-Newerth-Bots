@@ -45,6 +45,8 @@ object.tTopLane = {}
 object.tMiddleLane = {}
 object.tBottomLane = {}
 
+object.tEnemyLanes = {top = {}, middle = {}, bottom = {}}
+
 object.teamBotBrainInitialized = false
 function object:TeamBotBrainInitialize()
 	BotEcho('TeamBotBrainInitializing')

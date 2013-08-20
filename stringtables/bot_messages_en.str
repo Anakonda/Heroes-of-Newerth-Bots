@@ -22,6 +22,9 @@ respawn3		I'm back in action.
 respawn4		Er, uh, um... Recalculating?
 respawn5		Reconstruction complete.
 
+missing			{target} missing from {lane} lane
+returned		{target} returned to {lane} lane
+
 group_up		Grouping up to push at {lane} lane.
 
 defend			Going {lane} to defend.

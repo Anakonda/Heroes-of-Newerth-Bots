@@ -54,6 +54,9 @@ core.nEasyAggroReassessInterval = 60000
 core.nEasyAggroHarassBonus = 35
 core.nEasyAggroAbilityBonus = 30
 
+object.nMissCheckInterval = 2000
+object.nLastMissCheck = 6000
+
 --Called every frame the engine gives us during the pick phase
 function object:onpickframe()
 	if self:CanSelectHero(self.heroName) == true then
@@ -277,6 +280,44 @@ function object:onthink(tGameVariables)
 	end
 	
 	StopProfile()
+
+	--Check misses
+	if core.tMyLane ~= nil then
+		local nHeroMask = core.UNIT_MASK_HERO + core.UNIT_MASK_ALIVE
+		nTime = HoN.GetMatchTime()
+		if nTime > self.nLastMissCheck + self.nMissCheckInterval then
+			self.nLastMissCheck = nTime
+
+			local vecMidLanePos = core.GetFurthestCreepWavePos(core.tMyLane, core.bTraverseForward)
+			local sLaneName = core.tMyLane.sLaneName
+
+			local tMidUnits = HoN.GetUnitsInRadius(vecMidLanePos, 2000, nHeroMask)
+			for _, hero in pairs(tMidUnits) do
+				if hero:GetTeam() ~= core.myTeam then
+					bHeroInList = false
+					for _, savedUnit in pairs(core.teamBotBrain.tEnemyLanes[sLaneName]) do
+						if hero:GetUniqueID() == savedUnit.unit:GetUniqueID() then
+							savedUnit.nLastSeen = nTime
+							bHeroInList = true
+							break
+						end
+					end
+					if not bHeroInList then
+						core.teamBotBrain.tEnemyLanes[sLaneName][hero:GetUniqueID()] = {unit = hero, nLastSeen = nTime}
+						core.TeamChatLocalizedMessage("returned", {target = hero:GetTypeName(), lane = sLaneName}, 0)
+					end
+				end
+			end
+			for i, savedUnit in pairs(core.teamBotBrain.tEnemyLanes[sLaneName]) do
+				local heroUnit = savedUnit.unit
+				if core.tableContains(tMidUnits, heroUnit) == 0 and savedUnit.nLastSeen + 4000 < nTime then
+					core.teamBotBrain.tEnemyLanes[sLaneName][i] = nil
+					core.TeamChatLocalizedMessage("missing", {target = heroUnit:GetTypeName(), lane = sLaneName}, 0)
+				end
+			end
+		end
+	end
+
 end
 object.bAbilityCommandsDefault = object.bAbilityCommands
 
