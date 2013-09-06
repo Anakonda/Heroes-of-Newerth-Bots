@@ -381,11 +381,13 @@ function object:onthink(tGameVariables)
 			]]--
 			tHeroesFound = {}
 
-			for _,node in pairs(object.metadata.GetLane(sLaneName)) do
-				local heroesOnNode = HoN.GetUnitsInRadius(node:GetPosition(), 1200, nHeroMask)
-				for _,unit in pairs(heroesOnNode) do
-					if unit:GetTeam() ~= core.myTeam then
-						tinsert(tHeroesFound, unit)
+			for key,node in pairs(object.metadata.GetLane(sLaneName)) do
+				if key ~= "sLaneName" then
+					local heroesOnNode = HoN.GetUnitsInRadius(node:GetPosition(), 1200, nHeroMask)
+					for _,unit in pairs(heroesOnNode) do
+						if unit:GetTeam() ~= core.myTeam then
+							tinsert(tHeroesFound, unit)
+						end
 					end
 				end
 			end
