@@ -283,16 +283,31 @@ function object:onthink(tGameVariables)
 
 	--Check misses
 	if core.tMyLane ~= nil then
-		local nHeroMask = core.UNIT_MASK_HERO + core.UNIT_MASK_ALIVE
 		nTime = HoN.GetMatchTime()
 		if nTime > self.nLastMissCheck + self.nMissCheckInterval then
 			self.nLastMissCheck = nTime
 
-			local vecMidLanePos = core.GetFurthestCreepWavePos(core.tMyLane, core.bTraverseForward)
 			local sLaneName = core.tMyLane.sLaneName
 
-			local tMidUnits = HoN.GetUnitsInRadius(vecMidLanePos, 2000, nHeroMask)
-			for _, hero in pairs(tMidUnits) do
+			local nHeroMask = core.UNIT_MASK_HERO + core.UNIT_MASK_ALIVE
+			--[[
+			local vecLanePos = core.GetFurthestCreepWavePos(core.tMyLane, core.bTraverseForward)
+
+			
+			local tHeroesFound = HoN.GetUnitsInRadius(vecLanePos, 2000, nHeroMask)
+			]]--
+			tHeroesFound = {}
+
+			for _,node in pairs(object.metadata.GetLane(sLaneName)) do
+				local heroesOnNode = HoN.GetUnitsInRadius(node:GetPosition(), 1200, nHeroMask)
+				for _,unit in pairs(heroesOnNode) do
+					if unit:GetTeam() ~= core.myTeam then
+						tinsert(tHeroesFound, unit)
+					end
+				end
+			end
+
+			for _, hero in pairs(tHeroesFound) do
 				if hero:GetTeam() ~= core.myTeam then
 					bHeroInList = false
 					for _, savedUnit in pairs(core.teamBotBrain.tEnemyLanes[sLaneName]) do
@@ -310,7 +325,7 @@ function object:onthink(tGameVariables)
 			end
 			for i, savedUnit in pairs(core.teamBotBrain.tEnemyLanes[sLaneName]) do
 				local heroUnit = savedUnit.unit
-				if core.tableContains(tMidUnits, heroUnit) == 0 and savedUnit.nLastSeen + 4000 < nTime then
+				if core.tableContains(tHeroesFound, heroUnit) == 0 and savedUnit.nLastSeen + 4000 < nTime then
 					core.teamBotBrain.tEnemyLanes[sLaneName][i] = nil
 					core.TeamChatLocalizedMessage("missing", {target = heroUnit:GetTypeName(), lane = sLaneName}, 0)
 				end
