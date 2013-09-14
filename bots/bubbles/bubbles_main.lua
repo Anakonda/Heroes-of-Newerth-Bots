@@ -43,21 +43,21 @@ local ceil, floor, pi, tan, atan, atan2, abs, cos, sin, acos, max, random
 local BotEcho, VerboseLog, BotLog = core.BotEcho, core.VerboseLog, core.BotLog
 local Clamp = core.Clamp
 
-
 BotEcho(object:GetName()..' loading bubbles_main...')
 
-
--- hero_<hero>  to reference the internal hon name of a hero, Hero_Yogi ==wildsoul
 object.heroName = 'Hero_bubbles'
 
+-----------------------------------------
+--             Constants               --
+-----------------------------------------
 
 --   item buy order. internal names  
---[[
-behaviorLib.StartingItems  = {}
-behaviorLib.LaneItems  = {}
-behaviorLib.MidItems  = {}
-behaviorLib.LateItems  = {}
-]]--
+
+behaviorLib.StartingItems  = {"Item_MarkOfTheNovice", "2 Item_MinorTotem", "Item_GuardianRing", "Item_RunesOfTheBlight", "Item_ManaPotion"}
+behaviorLib.LaneItems  = {"Item_Marchers", "Item_ManaRegen3", "Item_Bottle", "Item_Regen"}
+behaviorLib.MidItems  = {"Item_Steamboots", "Item_PortalKey"}
+behaviorLib.LateItems  = {"Item_Protect", "Item_FrostfieldPlate", "Item_Morph", "Item_Freeze"}
+
 -- skillbuild table, 0=q, 1=w, 2=e, 3=r, 4=attri
 object.tSkills = {
 	0, 2, 0, 1, 0,
@@ -66,6 +66,19 @@ object.tSkills = {
 	3, 4, 4, 4, 4,
 	4, 4, 4, 4, 4,
 }
+
+
+object.nSurfUp = 12
+object.nSongUp = 8
+object.nUltUp = 35
+
+object.nSurfUse = 15
+object.nSongUse = 15
+object.nUltUse = 35
+
+object.nSurfTreshold = 40
+object.nSongTreshold = 45
+object.nUltTreshold = 60
 
 ------------------------------
 --	 skills			   --
@@ -129,16 +142,23 @@ object.oncombateventOld = object.oncombatevent
 object.oncombatevent	 = object.oncombateventOverride
 
 
-------------------------------------------------------
---			customharassutility override		  --
--- change utility according to usable spells here   --
-------------------------------------------------------
--- @param: iunitentity hero
--- @return: number
-local function CustomHarassUtilityFnOverride(hero)
-	return 40
+local function CustomHarassUtilityFnOverride (hero)
+	local nUtility = 0
+
+	if skills.abilSurf:CanActivate() then
+		nUtility = nUtility + object.nSurfUp
+	end
+
+	if skills.abilSong:CanActivate() then
+		nUtility = nUtility + object.nSongUp
+	end
+
+	if skills.abilUlt:CanActivate() then
+		nUtility = nUtility + object.nUltUp
+	end
+
+	return nUtility
 end
--- assisgn custom Harrass function to the behaviourLib object
 behaviorLib.CustomHarassUtility = CustomHarassUtilityFnOverride   
 
 
@@ -150,41 +170,55 @@ behaviorLib.CustomHarassUtility = CustomHarassUtilityFnOverride
 -- @return: none
 --
 local function HarassHeroExecuteOverride(botBrain)
-	
+
 	local unitTarget = behaviorLib.heroTarget
 	if unitTarget == nil then
 		return object.harassExecuteOld(botBrain) --Target is invalid, move on to the next behavior
 	end
-	
+
 	local nTime = HoN.GetMatchTime()
 
 	local unitSelf = core.unitSelf
 	local vecMyPosition = unitSelf:GetPosition() 
 	local nAttackRange = core.GetAbsoluteAttackRangeToUnit(unitSelf, unitTarget)
 	local nMyExtraRange = core.GetExtraRange(unitSelf)
-	
+
 	local vecTargetPosition = unitTarget:GetPosition()
 	local nTargetExtraRange = core.GetExtraRange(unitTarget)
 	local nTargetDistanceSq = Vector3.Distance2DSq(vecMyPosition, vecTargetPosition)
-	
+
 	local nLastHarassUtility = behaviorLib.lastHarassUtil
 	local bCanSee = core.CanSeeUnit(botBrain, unitTarget)	
 	local bActionTaken = false
-	
-	
+
+	local vecShellPos = object.getShellPosition()
+
 	if skills.abilSurf:CanActivate() then
-		local shell = object.getShellPosition()
-		if skills.abilSurf.nCastTime + skills.abilSurf.nShellLifeTime < nTime then
+		if object.nSurfTreshold < nLastHarassUtility and skills.abilSurf.nCastTime + skills.abilSurf.nShellLifeTime < nTime then
 			bActionTaken = object.useSurf(botBrain, vecTargetPosition)
-		elseif Vector3.Distance2DSq(object.getShellPosition(), vecTargetPosition) < 300*300 then
-			bActionTaken = object.useSurf(botBrain, vecTargetPosition)
+		elseif vecShellPos ~= nil then
+			if nTargetDistanceSq + 400 < Vector3.Distance2DSq(object.getShellPosition(), vecMyPosition) then --Shell have just passed the target
+				bActionTaken = object.useSurf(botBrain, vecTargetPosition)                   --Now blink on top of target
+			end
 		end
 	end
 
-	if not bActionTaken and skills.abilSong:CanActivate() and nTargetDistanceSq < 160000 then
+	if not bActionTaken and object.nSongTreshold < nLastHarassUtility and skills.abilSong:CanActivate() and nTargetDistanceSq < 160000 then
 		core.OrderAbility(botBrain, skills.abilSong)
 	end
-	
+
+	if not bActionTaken and object.nUltTreshold < nLastHarassUtility then
+		local funcWeighting = function(unit)
+			if unit:IsHero() then
+				return 1
+			else
+				return 0
+			end
+		end
+		local vecUltPosition = core.AoETargeting(unitSelf, skills.abilUlt:GetRange() + nMyExtraRange, 400, true, unitTarget, core.enemyTeam, funcWeighting)
+		core.OrderAbilityPosition(botBrain, skills.abilUlt, vecUltPosition)
+	end
+
 	if not bActionTaken then
 		return object.harassExecuteOld(botBrain)
 	end 
@@ -199,7 +233,9 @@ behaviorLib.HarassHeroBehavior["Execute"] = HarassHeroExecuteOverride
 --			  New functions			  --
 ---------------------------------------------
 
- local function getUnitsBetween(startPoint, endPoint, radius)
+local function getUnitsBetween(startPoint, endPoint, radius, team)
+	team = team or -1
+
 	local distance = vectorLength(startPoint, endPoint)
 
 	local units = HoN.GetUnitsInRadius(startPoint, distance, core.UNIT_MASK_UNIT + core.UNIT_MASK_ALIVE)
@@ -215,18 +251,17 @@ behaviorLib.HarassHeroBehavior["Execute"] = HarassHeroExecuteOverride
 	local divisor = (A*A+B*B)
 	for key,unit in pairs(units) do
 		local unitPos = unit:GetPosition()
-		if radiusSQ <= ((A * unitPos.x + B * unitPos.y + C)^2)/divisor and distance*distance > Vector3.Distance2DSq(endPoint, unitPos) then
+		if unit:GetTeam() == team and radiusSQ <= ((A * unitPos.x + B * unitPos.y + C)^2)/divisor and distance*distance > Vector3.Distance2DSq(endPoint, unitPos) then
 			unitsBetween[key]=unit
 		end
 	end
 	return unitsBetween
 end
 
-
 function object.getShellPosition()
 	local nCurrentTime = HoN.GetMatchTime()
 	local nTravelTime = nCurrentTime - skills.abilSurf.nCastTime
-	if nTravelTime > skills.abilSurf.nShellLifeTime then
+	if nTravelTime > skills.abilSurf.nShellLifeTime or nTravelTime < 0 then
 		return
 	end
 	local nDistance = nTravelTime * 850/1000
@@ -237,7 +272,6 @@ function object.useSurf(botBrain, target)
 	if skills.abilSurf:CanActivate() then
 		local nTime = HoN.GetMatchTime()
 		if nTime - skills.abilSurf.nShellLifeTime > skills.abilSurf.nCastTime then
-			BotEcho(tostring(nTime- skills.abilSurf.nShellLifeTime).." " ..tostring(skills.abilSurf.nCastTime))
 			skills.abilSurf.nCastTime = nTime
 			local vecCastPos = core.unitSelf:GetPosition()
 			skills.abilSurf.vecCastPos = vecCastPos
