@@ -51,6 +51,9 @@ object.heroName = 'Hero_bubbles'
 --             Constants               --
 -----------------------------------------
 
+behaviorLib.nRecentDamageMul = 100
+
+
 --   item buy order. internal names  
 
 behaviorLib.StartingItems  = {"Item_MarkOfTheNovice", "2 Item_MinorTotem", "Item_GuardianRing", "Item_RunesOfTheBlight", "Item_ManaPotion"}
@@ -76,7 +79,9 @@ object.nSurfUse = 15
 object.nSongUse = 15
 object.nUltUse = 35
 
-object.nSurfTreshold = 40
+object.nSurfTreshold = 35
+object.nCoverTreshold = 25 --for retreat
+object.nPortalKeyTreshold = 35
 object.nSongTreshold = 45
 object.nUltTreshold = 60
 
@@ -105,8 +110,7 @@ function object:SkillBuild()
 	if unitSelf:GetAbilityPointsAvailable() <= 0 then
 		return
 	end
-	
-   
+
 	local nlev = unitSelf:GetLevel()
 	local nlevpts = unitSelf:GetAbilityPointsAvailable()
 	for i = nlev, nlev+nlevpts do
@@ -114,27 +118,47 @@ function object:SkillBuild()
 	end
 end
 
-------------------------------------------------------
---			onthink override					  --
--- Called every bot tick, custom onthink code here  --
-------------------------------------------------------
--- @param: tGameVariables
--- @return: none
+local function funcFindItemsOverride(botBrain)
+	object.FindItemsOld(botBrain)
+
+	core.ValidateItem(core.itemSheepstick)
+	core.ValidateItem(core.itemFrostfieldPlate)
+	core.ValidateItem(core.itemPortalKey)
+
+	--only update if we need to
+	if core.itemSheepstick and core.itemFrostfieldPlate and core.itemPortalKey then
+		return
+	end
+
+	local inventory = core.unitSelf:GetInventory(false)
+	for slot = 1, 6, 1 do
+		local curItem = inventory[slot]
+		if curItem then
+			if core.itemSheepstick == nil and curItem:GetName() == "Item_Morph" then
+				core.itemSheepstick = core.WrapInTable(curItem)
+			elseif core.itemFrostfieldPlate == nil and curItem:GetName() == "Item_FrostfieldPlate" then
+				core.itemFrostfieldPlate = core.WrapInTable(curItem)
+			elseif core.itemPortalKey == nil and curItem:GetName() == "Item_PortalKey" then
+				core.itemPortalKey = core.WrapInTable(curItem)
+			end
+		end
+	end
+end
+object.FindItemsOld = core.FindItems
+core.FindItems = funcFindItemsOverride
+
 function object:onthinkOverride(tGameVariables)
 	self:onthinkOld(tGameVariables)
+
 
 	-- custom code here
 end
 object.onthinkOld = object.onthink
 object.onthink 	= object.onthinkOverride
 
-
 ----------------------------------------------
---			oncombatevent override		--
--- use to check for infilictors (fe. buffs) --
+--			oncombatevent override	    	--
 ----------------------------------------------
--- @param: eventdata
--- @return: none
 function object:oncombateventOverride(EventData)
 end
 -- override combat event trigger function.
@@ -161,14 +185,10 @@ local function CustomHarassUtilityFnOverride (hero)
 end
 behaviorLib.CustomHarassUtility = CustomHarassUtilityFnOverride   
 
-
 --------------------------------------------------------------
 --					Harass Behavior					   --
 -- All code how to use abilities against enemies goes here  --
 --------------------------------------------------------------
--- @param botBrain: CBotBrain
--- @return: none
---
 local function HarassHeroExecuteOverride(botBrain)
 
 	local unitTarget = behaviorLib.heroTarget
@@ -203,7 +223,11 @@ local function HarassHeroExecuteOverride(botBrain)
 		end
 	end
 
-	if not bActionTaken and object.nSongTreshold < nLastHarassUtility and skills.abilSong:CanActivate() and nTargetDistanceSq < 160000 then
+	if not bActionTaken and not skills.abilSurf:CanActivate() and core.itemPortalKey and core.itemPortalKey:CanActivate() then
+		bActionTaken = core.OrderItemPosition(botBrain, unitSelf, core.itemPortalKey, vecTargetPosition)
+	end
+
+	if not bActionTaken and object.nSongTreshold < nLastHarassUtility and skills.abilSong:CanActivate() and nTargetDistanceSq < (400 + nMyExtraRange) * (400 + nMyExtraRange) then
 		core.OrderAbility(botBrain, skills.abilSong)
 	end
 
@@ -216,7 +240,14 @@ local function HarassHeroExecuteOverride(botBrain)
 			end
 		end
 		local vecUltPosition = core.AoETargeting(unitSelf, skills.abilUlt:GetRange() + nMyExtraRange, 400, true, unitTarget, core.enemyTeam, funcWeighting)
-		core.OrderAbilityPosition(botBrain, skills.abilUlt, vecUltPosition)
+		if vecUltPosition ~= nil then
+			bActionTaken = core.OrderAbilityPosition(botBrain, skills.abilUlt, vecUltPosition)
+		end
+	end
+
+	if not bActionTaken and core.itemFrostfieldPlate ~= nil and core.itemFrostfieldPlate:CanActivate() then
+		botBrain:OrderItem(core.itemFrostfieldPlate.object)
+		bActionTaken = true
 	end
 
 	if not bActionTaken then
@@ -228,10 +259,100 @@ object.harassExecuteOld = behaviorLib.HarassHeroBehavior["Execute"]
 behaviorLib.HarassHeroBehavior["Execute"] = HarassHeroExecuteOverride
 
 
+function behaviorLib.DontBreakChannelExecuteOverride(botBrain)
+	if core.unitSelf:IsInvulnerable() then
+		return behaviorLib.RetreatFromThreatBehavior["Execute"](botBrain)
+	else
+		return true
+	end
+end
+
+behaviorLib.DontBreakChannelBehavior["Execute"] = behaviorLib.DontBreakChannelExecuteOverride
+
+
+
+function behaviorLib.RetreatFromThreatExecuteOverride(botBrain)
+	bActionTaken = false
+
+	nLastRetreatUtil = behaviorLib.lastRetreatUtil
+
+	local nTime = HoN.GetMatchTime()
+
+	local unitSelf = core.unitSelf
+	local vecMyPosition = unitSelf:GetPosition()
+	BotEcho("run")
+	BotEcho(core.NumberElements(eventsLib.incomingProjectiles["heroes"]))
+
+--[[
+	if skills.abilSurf:CanActivate() and nLastRetreatUtil > object.nSurfTreshold then
+		BotEcho("surf")
+		if skills.abilSurf.nCastTime + skills.abilSurf.nShellLifeTime < nTime then
+			bActionTaken = object.useSurf(botBrain, object.bestPointOnPath(vecMyPosition,  BotMetaData.FindPath(vecMyPosition, core.allyWell:GetPosition()), 1300))
+		elseif nTime > skills.abilSurf.nCastTime + 1500 then
+			bActionTaken = object.useSurf(botBrain)
+		end
+	end
+]]
+	if not bActionTaken and skills.abilCover:CanActivate() and (nLastRetreatUtil >= object.nCoverTreshold or eventsLib.recentDamageSec > 200 or eventsLib.recentDotTime > nTime -1000) then
+		BotEcho("take cover")
+		bActionTaken = core.OrderAbility(botBrain, skills.abilCover)
+	end
+
+bActionTaken = core.OrderAbility(botBrain, skills.abilCover)
+--[[
+	unitSelf = core.unitSelf
+
+	if unitSelf:IsInvulnerable() then
+		--check pk
+	end
+]]--
+	if not bActionTaken and not unitSelf:IsChanneling() then
+		bActionTaken = behaviorLib.RetreatFromThreatExecuteOld(botBrain)
+	end
+	return bActionTaken
+end
+behaviorLib.RetreatFromThreatExecuteOld = behaviorLib.RetreatFromThreatBehavior["Execute"]
+behaviorLib.RetreatFromThreatBehavior["Execute"] = behaviorLib.RetreatFromThreatExecuteOverride
 
 ---------------------------------------------
---			  New functions			  --
+--	         New functions	    		   --
 ---------------------------------------------
+--               MATH                      --
+
+-- Furthest point on path within range from start
+function object.bestPointOnPath(vecStartPoint, tPath, nRange)
+	local nRangeSQ = nRange * nRange
+	local vecReturn = nil
+	for i = #tPath - 1, 1, -1 do
+		local nDistanceToFirstPointSQ = Vector3.Distance2DSq(tPath[i]:GetPosition(), vecStartPoint)
+		local nDistanceToSecondPointSQ = Vector3.Distance2DSq(tPath[i + 1]:GetPosition(), vecStartPoint)
+		if (nDistanceToFirstPointSQ < nRangeSQ and nDistanceToSecondPointSQ > nRangeSQ) or
+			(nDistanceToFirstPointSQ > nRangeSQ and nDistanceToSecondPointSQ < nRangeSQ) then
+			--[[
+			A-------D----------B
+			 \     /
+			  \	  /
+			   \ /
+			    C
+
+			C is start point
+			D is point we want
+			A and B are points from tPath
+			]]
+			--Law of sines
+			local nAngleAtA = core.AngleBetween(tPath[i]:GetPosition() - vecStartPoint, tPath[i + 1]:GetPosition() - tPath[i]:GetPosition())
+			local nAngleAtD = math.asin(math.sqrt(nDistanceToFirstPointSQ) * math.sin(nAngleAtA)/nRange)
+			local nAngleAtC = math.pi - nAngleAtA - nAngleAtD
+			--Law of sines again
+			nLengtAtoD = nRange/math.sin(nAngleAtA)*math.sin(nAngleAtC)
+			local vecReturn = tPath[i]:GetPosition() + Vector3.Normalize(tPath[i + 1]:GetPosition() - tPath[i]:GetPosition()) * nLengtAtoD
+			core.DrawXPosition(vecReturn, 'yellow')
+			return vecReturn
+		end
+	end
+	--We should not be here
+	return vecStartPoint + Vector3.Normalize(tPath[1]:GetPosition() - vecStartPoint) * nRange
+end
 
 local function getUnitsBetween(startPoint, endPoint, radius, team)
 	team = team or -1
@@ -258,6 +379,9 @@ local function getUnitsBetween(startPoint, endPoint, radius, team)
 	return unitsBetween
 end
 
+
+--           shell surf          --
+
 function object.getShellPosition()
 	local nCurrentTime = HoN.GetMatchTime()
 	local nTravelTime = nCurrentTime - skills.abilSurf.nCastTime
@@ -271,7 +395,7 @@ end
 function object.useSurf(botBrain, target)
 	if skills.abilSurf:CanActivate() then
 		local nTime = HoN.GetMatchTime()
-		if nTime - skills.abilSurf.nShellLifeTime > skills.abilSurf.nCastTime then
+		if nTime - skills.abilSurf.nShellLifeTime > skills.abilSurf.nCastTime and target ~= nil then
 			skills.abilSurf.nCastTime = nTime
 			local vecCastPos = core.unitSelf:GetPosition()
 			skills.abilSurf.vecCastPos = vecCastPos
