@@ -19,7 +19,7 @@ object.abilityLib = object.abilityLib or {}
 local abilityLib = object.abilityLib
 
 
-abilityLib.targetSchemes = {"ally" = 0x01, "neutral" = 0x02, "enemy" = 0x04, "creep" = 0x10, "hero" = 0x20 } -- ally + hero means this ability can target ally heroes
+abilityLib.targetSchemes = {ally = 0x01, neutral = 0x02, enemy = 0x04, creep = 0x10, hero = 0x20 } -- ally + hero means this ability can target ally heroes
 
 -- Just to list possible values
 abilityLib.orderTypes = {"passive", "notarget", "targetunit", "targetpoint" } --choose one. vectors will be added later
@@ -28,9 +28,14 @@ abilityLib.roles = {"support", "carry", "cc", "nuke", "escape" }
 --[[
 string typename => { int targetScheme, string orderType, string role, bool ultimate }
 ]]
-abilityLib.abilities = {}
+abilityLib.tAbilities = {}
 
+abilityLib.tInitFunctions = {}
+
+--[[
 function abilityLib.loadAbilities(strHeroTypeName)
-	runfile "abilitydb/" .. strHeroTypeName:sub(6) .. ".lua"
+	local file = "/bots/abilitydb/" .. strHeroTypeName:sub(6):lower() .. ".lua"
+	runfile file
+	BotEcho(#abilityLib.tAbilities)
 end
-
+]]

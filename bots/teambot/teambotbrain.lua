@@ -24,6 +24,7 @@ object.metadata 	= {}
 runfile "bots/core.lua"
 runfile "bots/metadata.lua"
 runfile "bots/jungleLib.lua"
+runfile "bots/abilitylib.lua"
 
 local core, metadata = object.core, object.metadata
 
@@ -37,6 +38,8 @@ local Clamp = core.Clamp
 
 local jungleLib = object.jungleLib
 if jungleLib == nil then BotEcho("jungle lib is nil!") end
+
+local abilityLib = object.abilityLib
 
 BotEcho('Loading teambotbrain...')
 
@@ -322,6 +325,10 @@ function object.GetNearestRune(pos, bCertain, bPrioritizeBetter)
 		end
 	end
 	return nearestRune
+end
+
+function object.GetAbilityLib()
+	return abilityLib
 end
 
 function object:PrintLanes(tTop, tMid, tBot)

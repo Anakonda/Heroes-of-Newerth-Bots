@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bot
+	name="universal_test"
+	description="asd"
+	heroname="Hero_Monarch"
+	rootlua="universal_monarch.lua"
+	defaultplayername="monarchbot"
+	precachepath="/heroes/monarch/"	
+/>
