@@ -23,7 +23,7 @@ abilityLib.targetSchemes = {ally = 0x01, neutral = 0x02, enemy = 0x04, creep = 0
 
 -- Just to list possible values
 abilityLib.orderTypes = {"passive", "notarget", "targetunit", "targetpoint" } --choose one. vectors will be added later
-abilityLib.roles = {"support", "carry", "cc", "nuke", "escape" }
+abilityLib.roles = {"support", "heal", "carry", "cc", "nuke", "escape" }
 
 --[[
 string typename => { int targetScheme, string orderType, string role, bool ultimate }

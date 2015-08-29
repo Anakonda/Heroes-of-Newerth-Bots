@@ -52,6 +52,8 @@ BotEcho('loading ability lib bot...')
 
 object.heroName = 'Hero_Monarch'
 
+local sMyRole = "support" -- TODO: riftwars - teambotgives you one, normal game - another DB?
+
 local abilityLib = {}
 
 local function testflag(set, flag)
@@ -87,13 +89,40 @@ function object:SkillBuild()
 	if unitSelf:GetAbilityPointsAvailable() <= 0 then
 		return
 	end
+
+	--Pick ult
+	if skills[4]:CanLevelUp() then
+		upgradedSkill = skills[4]
+		skills[4]:LevelUp()
+		return
+	end
+
+	local tSkillRoles = {}
 	
-	--TODO
+	--TODO Pick these even more dynamically
+	if sMyRole == "support" then
+		tSkillRoles = {"heal", "cc", "support"}
+	elseif sMyrole == "carry" then
+		tSkillRoles = {"carry", "cc", "escape"}
+	end
+	
+	for skill in pairs(skills) do
+		local tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
+		if core.tableContains(tSkillRoles, tAbilityLibEntry.role) then
+			skill:LevelUp()
+			return
+		end	
+	end
+
 	for _,skill in pairs(skills) do
 		if skill:CanLevelUp() then
 			skill:LevelUp()
-			break
+			return
 		end
+	end
+
+	if upgradedSkill == nil then
+		unitSelf:GetAbility(4):LevelUp() --stats
 	end
 end
 
@@ -125,6 +154,10 @@ local function HarassHeroExecuteOverride(botBrain)
 		return false --can not execute, move on to the next behavior
 	end
 	
+	local vecTargetPosition = unitTarget:GetPosition()
+	local vecMyPosition = core.unitSelf:GetPosition()
+	local nDistance2DSQ = Vector3.Distance2DSq(vecTargetPosition, vecMyPosition)
+	
 	local bActionTaken = false
 	
 	for _, skill in pairs(skills) do
@@ -132,10 +165,12 @@ local function HarassHeroExecuteOverride(botBrain)
 			if skill:CanActivate() then
 				local tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
 				if testflag(tAbilityLibEntry.targetScheme, abilityLib.targetSchemes.enemy) and testflag(tAbilityLibEntry.targetScheme, abilityLib.targetSchemes.hero) then
-					if tAbilityLibEntry.orderType == "targetunit" then
-						bActionTaken = core.OrderAbilityEntity(botBrain, skill, unitTarget)
-					elseif tAbilityLibEntry.orderType == "targetpoint" then
-						bActionTaken = core.OrderAbilityPosition(botBrain, skill, unitTarget:GetPosition())
+					if skill:GetRange() ^ 2 > nDistance2DSQ then
+						if tAbilityLibEntry.orderType == "targetunit" then
+							bActionTaken = core.OrderAbilityEntity(botBrain, skill, unitTarget)
+						elseif tAbilityLibEntry.orderType == "targetpoint" then
+							bActionTaken = core.OrderAbilityPosition(botBrain, skill, unitTarget:GetPosition())
+						end
 					end
 				end
 			end
