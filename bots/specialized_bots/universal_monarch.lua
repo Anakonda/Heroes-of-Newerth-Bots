@@ -52,11 +52,7 @@ BotEcho('loading ability lib bot...')
 
 object.heroName = 'Hero_Monarch'
 
-object.abilityLib = nil
-local abilityLib = object.abilityLib
-
---abilityLib.loadAbilities(object.heroName)
-runfile "bots/abilitydb/monarch.lua"
+local abilityLib = {}
 
 local function testflag(set, flag)
 	return set % (2*flag) >= flag
@@ -110,10 +106,7 @@ function object:onthinkOverride(tGameVariables)
 	if not bAbilitylibInitialized and core.unitSelf and core.unitSelf:IsValid() then
 		bAbilitylibInitialized = true
 		local teambot = core.teamBotBrain
-		object.abilityLib = teambot.GetAbilityLib()
-		abilityLib = object.abilityLib
-		object.tInitAbilityData()
-		object.tInitAbilityData = nil
+		abilityLib = teambot.GetAbilityLib()
 		for _, skill in pairs(skills) do
 			local sTypeName = skill:GetTypeName()
 			tMyAbilityLib[sTypeName] = abilityLib.tAbilities[sTypeName]
@@ -137,10 +130,12 @@ local function HarassHeroExecuteOverride(botBrain)
 	for _, skill in pairs(skills) do
 		if not bActionTaken then
 			if skill:CanActivate() then
-				tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
+				local tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
 				if testflag(tAbilityLibEntry.targetScheme, abilityLib.targetSchemes.enemy) and testflag(tAbilityLibEntry.targetScheme, abilityLib.targetSchemes.hero) then
 					if tAbilityLibEntry.orderType == "targetunit" then
 						bActionTaken = core.OrderAbilityEntity(botBrain, skill, unitTarget)
+					elseif tAbilityLibEntry.orderType == "targetpoint" then
+						bActionTaken = core.OrderAbilityPosition(botBrain, skill, unitTarget:GetPosition())
 					end
 				end
 			end

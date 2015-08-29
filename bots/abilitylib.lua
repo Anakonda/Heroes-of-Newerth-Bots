@@ -39,3 +39,5 @@ function abilityLib.loadAbilities(strHeroTypeName)
 	BotEcho(#abilityLib.tAbilities)
 end
 ]]
+
+runfile "bots/abilitydb.lua"
