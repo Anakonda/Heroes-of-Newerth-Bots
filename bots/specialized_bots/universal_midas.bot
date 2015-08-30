@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bot
+	name="universal_test_midas"
+	description="asd"
+	heroname="Hero_Midas"
+	rootlua="universal.lua"
+	defaultplayername="midasbot"
+	precachepath="/heroes/midas/"	
+/>

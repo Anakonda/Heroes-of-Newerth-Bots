@@ -50,7 +50,7 @@ local Clamp = core.Clamp
 
 BotEcho('loading ability lib bot...')
 
-object.heroName = 'Hero_Monarch'
+object.heroName = 'deprecated'
 
 local sMyRole = "support" -- TODO: riftwars - teambotgives you one, normal game - another DB?
 
@@ -64,6 +64,8 @@ end
 -- Lanes
 --------------------------------
 core.tLanePreferences = {Jungle = 0, Mid = 3, ShortSolo = 3, LongSolo = 3, ShortSupport = 3, LongSupport = 3, ShortCarry = 3, LongCarry = 3}
+
+local tMyAbilityLib = nil
 
 --------------------------------
 -- Skills
@@ -92,7 +94,6 @@ function object:SkillBuild()
 
 	--Pick ult
 	if skills[4]:CanLevelUp() then
-		upgradedSkill = skills[4]
 		skills[4]:LevelUp()
 		return
 	end
@@ -106,33 +107,34 @@ function object:SkillBuild()
 		tSkillRoles = {"carry", "cc", "escape"}
 	end
 	
-	for skill in pairs(skills) do
+	if tMyAbilityLib == nil then
+		return
+	end
+	
+	for _, skill in pairs(skills) do
 		local tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
-		if core.tableContains(tSkillRoles, tAbilityLibEntry.role) then
+		if skill:CanLevelUp() and core.tableContains(tSkillRoles, tAbilityLibEntry.role) then
 			skill:LevelUp()
 			return
 		end	
 	end
 
-	for _,skill in pairs(skills) do
+	for _, skill in pairs(skills) do
 		if skill:CanLevelUp() then
 			skill:LevelUp()
 			return
 		end
 	end
 
-	if upgradedSkill == nil then
-		unitSelf:GetAbility(4):LevelUp() --stats
-	end
+	unitSelf:GetAbility(4):LevelUp() --stats
 end
 
-
-local tMyAbilityLib = {}
 local bAbilitylibInitialized = false
 function object:onthinkOverride(tGameVariables)
 	self:onthinkOld(tGameVariables)
 
 	if not bAbilitylibInitialized and core.unitSelf and core.unitSelf:IsValid() then
+		tMyAbilityLib = {}
 		bAbilitylibInitialized = true
 		local teambot = core.teamBotBrain
 		abilityLib = teambot.GetAbilityLib()
@@ -160,6 +162,10 @@ local function HarassHeroExecuteOverride(botBrain)
 	
 	local bActionTaken = false
 	
+	if tMyAbilityLib == nil then
+		return
+	end
+	
 	for _, skill in pairs(skills) do
 		if not bActionTaken then
 			if skill:CanActivate() then
@@ -186,5 +192,32 @@ end
 
 object.harassExecuteOld = behaviorLib.HarassHeroBehavior["Execute"]
 behaviorLib.HarassHeroBehavior["Execute"] = HarassHeroExecuteOverride
+
+
+
+
+function behaviorLib.CustomRetreatExecute(botBrain)
+	if tMyAbilityLib == nil then
+		return
+	end
+	
+	local bActionTaken = false
+	
+	for _, skill in pairs(skills) do
+		if skill:CanActivate() then
+			local tAbilityLibEntry = tMyAbilityLib[skill:GetTypeName()]
+			if tAbilityLibEntry.role = "escape" then
+				if tAbilityLibEntry.orderType == "targetpoint" then
+					bActionTaken = core.OrderBlinkAbilityToEscape(botBrain, skill)
+				end
+			end
+		end
+	end
+end
+
+
+
+
+
 
 BotEcho('finished loading ability test bot')
